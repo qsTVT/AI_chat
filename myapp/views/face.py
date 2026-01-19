@@ -312,75 +312,86 @@ def face_detect(request):
 
 
 def face_enroll(request):
-    if request.method == "GET":
-        return render(request, "face_enroll.html")
-    if request.method != "POST":
-        return JsonResponse({"code": 405, "msg": "只支持POST请求"})
-    if not os.path.isdir(face_url):
+    try:
+        if request.method == "GET":
+            return render(request, "face_enroll.html")
+        if request.method != "POST":
+            return JsonResponse({"code": 405, "msg": "只支持POST请求"})
+        if not os.path.isdir(face_url):
+            try:
+                os.makedirs(face_url, exist_ok=True)
+            except Exception:
+                return JsonResponse({"code": 500, "msg": "人脸库目录不存在，请联系管理员"})
         try:
-            os.makedirs(face_url, exist_ok=True)
+            data = json.loads(request.body.decode("utf-8"))
         except Exception:
-            return JsonResponse({"code": 500, "msg": "人脸库目录不存在，请联系管理员"})
-    try:
-        data = json.loads(request.body.decode("utf-8"))
-    except Exception:
-        return JsonResponse({"code": 400, "msg": "请求数据格式错误"})
-    phone = data.get("phone")
-    password = data.get("password")
-    user_info, err = _require_admin_or_user_password(phone, password)
-    if err:
-        return err
-    user_id = int(user_info[0])
-    existing_path = os.path.join(face_url, f"{user_id}.jpg")
-    if os.path.isfile(existing_path):
-        return JsonResponse({"code": 400, "msg": "该账号已录入人脸，无需重复录入"})
-    image_array = get_image_array(request)
-    rgb = _ensure_rgb(image_array)
-    if rgb is None:
-        return JsonResponse({"code": 400, "msg": "未检测到人脸"})
-    current_encoding, loc = _get_single_face_encoding(rgb)
-    if current_encoding is None:
-        return JsonResponse({"code": 400, "msg": "请确保画面中只有一张清晰人脸"})
-
-    for other_id, enc in _iter_known_encodings():
-        if other_id == user_id:
-            continue
+            return JsonResponse({"code": 400, "msg": "请求数据格式错误"})
+        phone = data.get("phone")
+        password = data.get("password")
+        user_info, err = _require_admin_or_user_password(phone, password)
+        if err:
+            return err
+        user_id = int(user_info[0])
+        existing_path = os.path.join(face_url, f"{user_id}.jpg")
+        if os.path.isfile(existing_path):
+            return JsonResponse({"code": 400, "msg": "该账号已录入人脸，无需重复录入"})
+        
         try:
-            dist = float(face_recognition.face_distance([enc], current_encoding)[0])
-        except Exception:
-            continue
-        if dist < FACE_DISTANCE_DUPLICATE_THRESHOLD:
-            return JsonResponse({"code": 400, "msg": "该人脸已被其他账号录入，无法重复录入"})
+            image_array = get_image_array(request)
+            rgb = _ensure_rgb(image_array)
+        except Exception as e:
+            print(f"解析图片失败: {e}")
+            return JsonResponse({"code": 400, "msg": "图片数据传输异常，请检查摄像头是否正常"})
 
-    tmp_path = os.path.join(face_url, f"{user_id}_tmp.jpg")
-    try:
-        if os.path.isfile(tmp_path):
-            os.remove(tmp_path)
-    except Exception:
-        pass
-    try:
-        if not _save_cropped_face(rgb, loc, tmp_path):
-            raise RuntimeError("write_failed")
-        os.replace(tmp_path, existing_path)
-    except Exception as e:
-        print(f"Error in face_enroll: {e}")
+        if rgb is None:
+            return JsonResponse({"code": 400, "msg": "未检测到人脸"})
+        current_encoding, loc = _get_single_face_encoding(rgb)
+        if current_encoding is None:
+            return JsonResponse({"code": 400, "msg": "请确保画面中只有一张清晰人脸"})
+
+        for other_id, enc in _iter_known_encodings():
+            if other_id == user_id:
+                continue
+            try:
+                dist = float(face_recognition.face_distance([enc], current_encoding)[0])
+            except Exception:
+                continue
+            if dist < FACE_DISTANCE_DUPLICATE_THRESHOLD:
+                return JsonResponse({"code": 400, "msg": "该人脸已被其他账号录入，无法重复录入"})
+
+        tmp_path = os.path.join(face_url, f"{user_id}_tmp.jpg")
         try:
             if os.path.isfile(tmp_path):
                 os.remove(tmp_path)
         except Exception:
             pass
-        return JsonResponse({"code": 500, "msg": f"保存人脸图片失败: {str(e)}"})
+        try:
+            if not _save_cropped_face(rgb, loc, tmp_path):
+                raise RuntimeError("write_failed")
+            os.replace(tmp_path, existing_path)
+        except Exception as e:
+            print(f"Error in face_enroll: {e}")
+            try:
+                if os.path.isfile(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            return JsonResponse({"code": 500, "msg": f"保存人脸图片失败: {str(e)}"})
 
-    resp = JsonResponse({"code": 200, "msg": "录入成功", "data": {"id": user_id}})
-    resp.set_signed_cookie(
-        key="user_auth",
-        value=str(user_id),
-        salt="myapp_user",
-        httponly=True,
-        samesite="Lax",
-        secure=request.is_secure(),
-    )
-    return resp
+        resp = JsonResponse({"code": 200, "msg": "录入成功", "data": {"id": user_id}})
+        resp.set_signed_cookie(
+            key="user_auth",
+            value=str(user_id),
+            salt="myapp_user",
+            httponly=True,
+            samesite="Lax",
+            secure=request.is_secure(),
+        )
+        return resp
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"code": 500, "msg": f"服务器内部错误: {str(e)}"})
 
 
 def face_select(id=None, phone=None):

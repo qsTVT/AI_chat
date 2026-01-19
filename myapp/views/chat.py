@@ -93,21 +93,34 @@ def chat(request):
                 # If session ID provided but not in DB, create it if user logged in
                 session = ChatSession.objects.create(id=session_id, user_id=str(user_id), title=text[:20])
 
-    if session:
-        ChatMessage.objects.create(session=session, role="user", content=text)
+    # Remove early save to prevent context duplication when loading from DB
+    # if session:
+    #     ChatMessage.objects.create(session=session, role="user", content=text)
 
     dst = ollama_chat(text, session_id)
     
-    def stream_wrapper(generator, session):
-        full_response = ""
-        for chunk in generator:
-            full_response += chunk
-            yield chunk
+    def stream_wrapper(generator, session, user_text):
+        # Save user message here, ensuring it's in DB for persistence but after get_history might have run
         if session:
-            ChatMessage.objects.create(session=session, role="assistant", content=full_response)
-            session.save()
+            try:
+                ChatMessage.objects.create(session=session, role="user", content=user_text)
+            except Exception as e:
+                print(f"Error saving user message: {e}")
 
-    return StreamingHttpResponse(stream_wrapper(dst, session), content_type="text/plain")
+        full_response = ""
+        try:
+            for chunk in generator:
+                full_response += chunk
+                yield chunk
+            if session:
+                ChatMessage.objects.create(session=session, role="assistant", content=full_response)
+                session.save()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"\n[System Error]: {str(e)}"
+
+    return StreamingHttpResponse(stream_wrapper(dst, session, text), content_type="text/plain")
 
 def get_session(request):
     session_id = request.headers.get("X-Chat-Session-ID")
