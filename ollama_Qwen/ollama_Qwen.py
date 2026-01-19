@@ -28,7 +28,19 @@ store = {}
 
 def get_history(session_id):
     if session_id not in store:
-        store[session_id] = ChatMessageHistory()
+        history = ChatMessageHistory()
+        try:
+            from myapp.models import ChatSession
+            session = ChatSession.objects.get(id=session_id)
+            messages = session.messages.all()
+            for msg in messages:
+                if msg.role == 'user':
+                    history.add_user_message(msg.content)
+                else:
+                    history.add_ai_message(msg.content)
+        except Exception:
+            pass
+        store[session_id] = history
     return store[session_id]
 
 chainbot = RunnableWithMessageHistory(

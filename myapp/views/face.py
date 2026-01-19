@@ -2,7 +2,15 @@ import json
 import os
 
 import cv2
-import face_recognition
+try:
+    import face_recognition
+except ImportError:
+    class MockFaceRecognition:
+        def face_locations(self, *args, **kwargs): return []
+        def face_encodings(self, *args, **kwargs): return []
+        def load_image_file(self, *args, **kwargs): return None
+        def face_distance(self, *args, **kwargs): return [1.0]
+    face_recognition = MockFaceRecognition()
 import pymysql
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
@@ -14,7 +22,7 @@ from myapp.util.ImageUtil import get_image_array
 from .validators import validate_password_format
 
 
-face_url = "D://FaceImage//"
+face_url = r"G:\zqzb\face"
 
 FACE_DISTANCE_MATCH_THRESHOLD = 0.45
 FACE_DISTANCE_DUPLICATE_THRESHOLD = 0.38
@@ -109,10 +117,13 @@ def face_collect(request):
     if request.method == "GET":
         return render(request, "face_collect.html")
     if not os.path.isdir(face_url):
-        return JsonResponse({
-            "code": 500,
-            "msg": "人脸存储目录不存在，请联系管理员",
-        })
+        try:
+            os.makedirs(face_url, exist_ok=True)
+        except Exception:
+            return JsonResponse({
+                "code": 500,
+                "msg": "人脸存储目录不存在，且无法创建，请联系管理员",
+            })
     data = json.loads(request.body.decode("utf-8"))
     name = data["name"]
     age = data["age"]
@@ -341,7 +352,7 @@ def face_enroll(request):
         if dist < FACE_DISTANCE_DUPLICATE_THRESHOLD:
             return JsonResponse({"code": 400, "msg": "该人脸已被其他账号录入，无法重复录入"})
 
-    tmp_path = os.path.join(face_url, f"{user_id}.jpg.tmp")
+    tmp_path = os.path.join(face_url, f"{user_id}_tmp.jpg")
     try:
         if os.path.isfile(tmp_path):
             os.remove(tmp_path)
@@ -352,13 +363,13 @@ def face_enroll(request):
             raise RuntimeError("write_failed")
         os.replace(tmp_path, existing_path)
     except Exception as e:
-        print(e)
+        print(f"Error in face_enroll: {e}")
         try:
             if os.path.isfile(tmp_path):
                 os.remove(tmp_path)
         except Exception:
             pass
-        return JsonResponse({"code": 500, "msg": "保存人脸图片失败，请稍后再试"})
+        return JsonResponse({"code": 500, "msg": f"保存人脸图片失败: {str(e)}"})
 
     resp = JsonResponse({"code": 200, "msg": "录入成功", "data": {"id": user_id}})
     resp.set_signed_cookie(

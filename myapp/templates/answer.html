@@ -3,13 +3,14 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title></title>
-    <script src={% static "js/vue.min.js" %}></script>
-    <script src={% static "js/index.js" %}></script>
-    <script src={% static "js/marked.min.js" %}></script>
-    <script src={% static "js/purify.min.js" %}></script>
-    <script src={% static "js/axios.min.js" %}></script>
-    <link href={% static "css/index.css" %} rel="stylesheet"/>
+    <title>AI 聊天助手</title>
+    <script src="{% static 'js/vue.min.js' %}"></script>
+    <script src="{% static 'js/index.js' %}"></script>
+    <script src="{% static 'js/marked.min.js' %}"></script>
+    <script src="{% static 'js/purify.min.js' %}"></script>
+    <script src="{% static 'js/axios.min.js' %}"></script>
+    <link href="{% static 'css/index.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/element-icons.css' %}" rel="stylesheet">
 </head>
 <body>
 {% verbatim %}
@@ -17,30 +18,48 @@
     <div id="chat-layout">
         <div id="history-panel">
             <div class="history-header">
-                <div class="history-title">对话历史</div>
-                <div class="history-subtitle">点击查看对应的问题位置</div>
+                <div class="history-title">
+                    <span>对话列表</span>
+                    <el-button type="text" icon="el-icon-plus" style="color: #fff; float: right;" @click="createNewSession">新建</el-button>
+                </div>
             </div>
             <div class="history-list">
-                <div v-for="(item, index) in historyList"
-                     :key="index"
+                <div v-for="session in sessionList"
+                     :key="session.id"
                      class="history-item"
-                     @click="scrollToMessage(item.messageIndex)">
-                    <div class="history-item-title">问题 {{ index + 1 }}</div>
-                    <div class="history-item-preview">{{ item.preview }}</div>
+                     :class="{ active: currentSessionId === session.id }"
+                     @click="switchSession(session.id)">
+                     
+                    <div class="history-item-content" v-if="editingSessionId !== session.id">
+                        <div class="history-item-title">
+                            {{ session.title || '新对话' }}
+                            <i class="el-icon-edit edit-btn" @click.stop="startEditSession(session)"></i>
+                        </div>
+                        <div class="history-item-preview">{{ formatTime(session.updated_at) }}</div>
+                    </div>
+                    
+                    <div class="history-item-edit" v-else @click.stop>
+                        <el-input size="mini" v-model="editTitle" 
+                                  ref="editInput"
+                                  @blur="saveSessionTitle(session)"
+                                  @keyup.enter.native="saveSessionTitle(session)"></el-input>
+                    </div>
+
+                    <i class="el-icon-delete delete-btn" v-if="editingSessionId !== session.id" @click.stop="deleteSession(session.id)"></i>
                 </div>
-                <div v-if="historyList.length === 0" class="history-empty">
-                    暂无历史，对话开始后会在此展示
+                <div v-if="sessionList.length === 0" class="history-empty">
+                    暂无历史对话
                 </div>
             </div>
         </div>
         <div id="chat-main">
             <div id="chat-header">
                 <div>
-                    <div class="chat-header-title">AI 聊天助手</div>
+                    <div class="chat-header-title">{{ currentSessionTitle }}</div>
                     <div class="chat-header-subtitle">支持 Markdown 渲染和上下文记忆</div>
                 </div>
                 <div style="margin-left: auto;">
-                    <el-button size="mini" @click="goHome">返回登录</el-button>
+                    <el-button size="mini" @click="goHome">返回主页</el-button>
                 </div>
             </div>
             <div id="chat-container">
@@ -60,7 +79,7 @@
                             </el-input>
                         </el-col>
                         <el-col :span="2">
-                            <el-button type="primary" @click="sendMessage">发送</el-button>
+                            <el-button type="primary" @click="sendMessage" :loading="sending">发送</el-button>
                         </el-col>
                     </el-row>
                 </div>
@@ -76,143 +95,197 @@
         data() {
             return {
                 input: '',
-                messages: [{
-                    "role": "assistant",
-                    "content": "你好，我是 AI 助手，可以帮你解答问题~"
-                }]
+                messages: [],
+                sessionList: [],
+                currentSessionId: null,
+                sending: false,
+                editingSessionId: null,
+                editTitle: ''
             }
         },
         computed: {
-            historyList() {
-                const userIndexes = []
-                this.messages.forEach((m, index) => {
-                    if (m.role === "user") userIndexes.push(index)
-                })
-                if (userIndexes.length === 0) return []
-                const last = this.messages[userIndexes[userIndexes.length - 1]]
-                let text = (last && last.content) ? String(last.content) : ""
-                if (text.length > 20) text = text.slice(0, 20) + "..."
-                return [{
-                    messageIndex: userIndexes[0],
-                    preview: "本次会话（" + userIndexes.length + "条问题）：" + (text || "空消息")
-                }]
+            currentSessionTitle() {
+                if (!this.currentSessionId) return "AI 聊天助手";
+                const sess = this.sessionList.find(s => s.id === this.currentSessionId);
+                return sess ? sess.title : "AI 聊天助手";
             }
         },
         methods: {
+            formatTime(timeStr) {
+                if (!timeStr) return '';
+                return new Date(timeStr).toLocaleString();
+            },
             scrollToBottom() {
                 this.$nextTick(() => {
                     const container = document.getElementById('messages');
-                    container.scrollTop = container.scrollHeight;
+                    if(container) container.scrollTop = container.scrollHeight;
                 });
-            },
-            scrollToMessage(index) {
-                this.$nextTick(() => {
-                    const container = document.getElementById('messages')
-                    if (!container) {
-                        return
-                    }
-                    const nodes = container.getElementsByClassName('message')
-                    if (index >= 0 && index < nodes.length) {
-                        const el = nodes[index]
-                        if (el && el.scrollIntoView) {
-                            el.scrollIntoView({behavior: 'smooth', block: 'start'})
-                        }
-                    }
-                })
             },
             renderMarkDown(text) {
-                let rawHtml = marked.parse(text);
+                let rawHtml = marked.parse(text || '');
                 return DOMPurify.sanitize(rawHtml);
             },
+            loadSessions() {
+                axios.get('/api/sessions/').then(res => {
+                    if (res.data.code === 200) {
+                        this.sessionList = res.data.data;
+                        if (this.sessionList.length > 0) {
+                            // If no current session, select the first one (most recent)
+                            if (!this.currentSessionId) {
+                                this.switchSession(this.sessionList[0].id);
+                            }
+                        } else {
+                            // No sessions, create one
+                            this.createNewSession();
+                        }
+                    }
+                });
+            },
+            createNewSession() {
+                axios.get('/api/sessions/create/').then(res => {
+                    if (res.data.code === 200) {
+                        this.loadSessions(); // Reload list
+                        this.switchSession(res.data.data.id);
+                        this.messages = [{
+                            "role": "assistant",
+                            "content": "你好，我是 AI 助手，可以帮你解答问题~"
+                        }];
+                    }
+                });
+            },
+            switchSession(id) {
+                if (this.editingSessionId) return; // Prevent switching while editing
+                this.currentSessionId = id;
+                this.loadMessages(id);
+            },
+            loadMessages(sessionId) {
+                axios.get('/api/messages/?session_id=' + sessionId).then(res => {
+                    if (res.data.code === 200) {
+                        this.messages = res.data.data;
+                        if (this.messages.length === 0) {
+                             this.messages.push({
+                                "role": "assistant",
+                                "content": "你好，我是 AI 助手，可以帮你解答问题~"
+                            });
+                        }
+                        this.scrollToBottom();
+                    }
+                });
+            },
+            deleteSession(id) {
+                if(!confirm('确定删除此对话吗？')) return;
+                axios.get('/api/sessions/delete/?session_id=' + id).then(res => {
+                    if (res.data.code === 200) {
+                        if (this.currentSessionId === id) {
+                            this.currentSessionId = null;
+                            this.messages = [];
+                        }
+                        this.loadSessions();
+                    }
+                });
+            },
+            startEditSession(session) {
+                this.editingSessionId = session.id;
+                this.editTitle = session.title;
+                this.$nextTick(() => {
+                    if(this.$refs.editInput && this.$refs.editInput[0]) {
+                        this.$refs.editInput[0].focus();
+                    }
+                });
+            },
+            saveSessionTitle(session) {
+                if (!this.editingSessionId) return;
+                
+                const newTitle = this.editTitle.trim();
+                if (newTitle && newTitle !== session.title) {
+                    axios.post('/api/sessions/update/', {
+                        session_id: session.id,
+                        title: newTitle
+                    }).then(res => {
+                        if (res.data.code === 200) {
+                            session.title = newTitle;
+                        }
+                    }).finally(() => {
+                        this.editingSessionId = null;
+                    });
+                } else {
+                    this.editingSessionId = null;
+                }
+            },
             sendMessage() {
-                if (!this.input.trim()) return;
-// 添加用户消息
+                if (!this.input.trim() || this.sending) return;
+                
+                if (!this.currentSessionId) {
+                    this.createNewSession(); 
+                    return; 
+                }
+
+                this.sending = true;
+                const userText = this.input;
                 this.messages.push({
                     role: 'user',
-                    content: this.input
+                    content: userText
                 });
-// 占位 AI 消息
+                
                 const aiIndex = this.messages.push({
                     role: 'assistant',
                     content: 'AI 正在输入...'
                 }) - 1;
-                let sessionId = sessionStorage.getItem('SESSIONID');
-                let userMsg = {"question": this.input};
+                
+                let userMsg = {"question": userText};
                 this.input = '';
+                this.scrollToBottom();
+
                 fetch('/chat/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Chat-Session-ID': sessionId
+                        'X-Chat-Session-ID': this.currentSessionId
                     },
-                    body:
-                        `messages=${encodeURIComponent(JSON.stringify(userMsg))}`
+                    body: `messages=${encodeURIComponent(JSON.stringify(userMsg))}`
                 }).then(response => {
-// 创建一个流读取器 (reader) 用于逐块读取数据
                     const reader = response.body.getReader();
-// 创建一个文本解码器 (decoder)
                     const decoder = new TextDecoder();
-// 用来累积流式返回的文本，最终就是 AI 的完整回复
                     let aiContent = '';
-// 读取数据
                     const read = () => {
-                        reader.read().then(({
-                                                done,
-                                                value
-                                            }) => {
+                        reader.read().then(({done, value}) => {
                             if (done) {
-// 流结束
+                                this.sending = false;
                                 if (!aiContent.trim()) {
                                     this.$set(this.messages, aiIndex, {
                                         role: 'assistant',
                                         content: 'AI 没有返回内容'
                                     });
                                 }
+                                // Reload sessions to update title/time
+                                this.loadSessions();
                                 return;
                             }
-                            aiContent += decoder.decode(value, {
-                                stream: true
-                            });
+                            aiContent += decoder.decode(value, {stream: true});
                             this.$set(this.messages, aiIndex, {
                                 role: 'assistant',
                                 content: aiContent
                             });
                             this.scrollToBottom();
-// 继续读取数据-递归
                             read();
                         });
                     };
-// 开始读取数据
                     read();
-// 把数据替换当前message数组中的content内容为最终的回复
-                    this.messages[aiIndex].content = aiContent;
                 }).catch(err => {
                     console.error(err);
+                    this.sending = false;
                     this.$set(this.messages, aiIndex, {
                         role: 'assistant',
                         content: '请求失败，请稍后重试'
                     });
-                    this.scrollToBottom();
                 });
-                this.scrollToBottom();
             },
             goHome() {
                 window.location.href = '/';
-            },
-            getSessionId() {
-                axios.get('/session/')
-                    .then(result => {
-                        let data = result.data;
-                        if (data.code == 200) {
-                            let sessionId = data.data;
-                            sessionStorage.clear();
-                            sessionStorage.setItem('SESSIONID', sessionId);
-                        }
-                    })
             }
         },
         mounted() {
-            this.getSessionId();
+            this.loadSessions();
         }
     })
 </script>
@@ -260,6 +333,9 @@
         font-size: 18px;
         font-weight: 700;
         margin-bottom: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
     .history-subtitle {
@@ -280,17 +356,29 @@
         margin-bottom: 8px;
         cursor: pointer;
         transition: background 0.2s ease, transform 0.1s ease;
+        position: relative;
     }
 
     .history-item:hover {
         background: rgba(255, 255, 255, 0.16);
         transform: translateY(-1px);
     }
+    
+    .history-item.active {
+        background: rgba(255, 255, 255, 0.25);
+        border-left: 3px solid #fff;
+    }
 
     .history-item-title {
         font-size: 13px;
         font-weight: 600;
         margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
     .history-item-preview {
@@ -298,11 +386,42 @@
         opacity: 0.9;
         word-break: break-all;
     }
+    
+    .edit-btn, .delete-btn {
+        display: none;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    
+    .edit-btn {
+        margin-left: 5px;
+        color: #fff;
+    }
+    
+    .delete-btn {
+        position: absolute;
+        right: 12px;
+        top: 32px;
+        color: #ffcccc;
+    }
+
+    .history-item:hover .edit-btn,
+    .history-item:hover .delete-btn {
+        display: inline-block;
+    }
+    
+    .history-item-edit .el-input__inner {
+        height: 24px;
+        line-height: 24px;
+        padding: 0 5px;
+    }
 
     .history-empty {
         font-size: 12px;
         opacity: 0.9;
         padding: 0 4px;
+        text-align: center;
+        margin-top: 20px;
     }
 
     #chat-main {

@@ -31,7 +31,7 @@ ALLOWED_HOSTS = []
 MYAPP_DB = {
     "HOST": os.getenv("MYAPP_DB_HOST", "localhost"),
     "USER": os.getenv("MYAPP_DB_USER", "root"),
-    "PASSWORD": os.getenv("MYAPP_DB_PASSWORD", "040927"),
+    "PASSWORD": os.getenv("MYAPP_DB_PASSWORD", "12345678"),
     "NAME": os.getenv("MYAPP_DB_NAME", "suse_face"),
     "CHARSET": os.getenv("MYAPP_DB_CHARSET", "utf8"),
     "TABLE_USER_INFO": os.getenv("MYAPP_DB_TABLE_USER_INFO", "user_info"),
