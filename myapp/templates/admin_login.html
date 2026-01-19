@@ -1,0 +1,63 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>管理员登录</title>
+    <script src="{% static 'js/vue.min.js' %}"></script>
+    <script src="{% static 'js/index.js' %}"></script>
+    <script src="{% static 'js/axios.min.js' %}"></script>
+    <link href="{% static 'css/index.css' %}" rel="stylesheet">
+    <link href="{% static 'css/element-icons.css' %}" rel="stylesheet">
+</head>
+<body>
+<div id="adminLoginApp" class="home-container">
+    <div class="home-right" style="width:100%;padding:40px 36px;">
+        <div class="home-title">管理员登录</div>
+        <el-form :model="form" label-width="80px">
+            <el-form-item label="用户名">
+                <el-input v-model="form.username" placeholder="请输入管理员用户名"></el-input>
+            </el-form-item>
+            <el-form-item label="密码">
+                <el-input v-model="form.password" type="password" placeholder="请输入密码"></el-input>
+            </el-form-item>
+            <div class="error-text">{{ errorText }}</div>
+            <div class="btn-row">
+                <el-button type="primary" :loading="loading" @click="submit">登录</el-button>
+                <el-button plain @click="goHome">返回首页</el-button>
+            </div>
+        </el-form>
+    </div>
+    </div>
+<script>
+    new Vue({
+        el: '#adminLoginApp',
+        data: function () {
+            return {
+                form: { username: '', password: '' },
+                loading: false,
+                errorText: ''
+            }
+        },
+        methods: {
+            submit: function () {
+                var u=this.form.username, p=this.form.password, that=this
+                this.errorText=''
+                if(!u || !p){ this.errorText='用户名和密码不能为空'; alert(this.errorText); return }
+                this.loading=true
+                axios.post('/api/admin/login/', { username:u, password:p }).then(function(res){
+                    var data = res.data
+                    if(data.code===200){
+                        window.location.href = data.redirect_url || '/page/admin/dashboard/'
+                    }else{
+                        that.errorText = data.msg || '登录失败'; alert(that.errorText)
+                    }
+                }).catch(function(){ that.errorText='请求失败，请稍后重试'; alert(that.errorText) })
+                  .then(function(){ that.loading=false })
+            },
+            goHome: function(){ window.location.href='/' }
+        }
+    })
+</script>
+</body>
+</html>

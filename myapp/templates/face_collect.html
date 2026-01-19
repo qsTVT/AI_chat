@@ -1,0 +1,278 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>人脸采集注册</title>
+    <script src="{% static 'js/vue.min.js' %}"></script>
+    <script src="{% static 'js/index.js' %}"></script>
+    <script src="{% static 'js/axios.min.js' %}"></script>
+    <script src="{% static 'js/jquery.js' %}"></script>
+    <script src="{% static 'js/faceUtil.js' %}"></script>
+    <link href="{% static 'css/index.css' %}" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .face-container {
+            width: 960px;
+            max-width: 96%;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            display: flex;
+            overflow: hidden;
+        }
+        .face-left {
+            flex: 1;
+            padding: 40px 32px;
+            background: linear-gradient(135deg, #4e54c8, #8f94fb);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .face-left-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .face-left-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+        .face-left-footer {
+            font-size: 12px;
+            opacity: 0.85;
+        }
+        .face-right {
+            flex: 1.4;
+            padding: 28px 32px;
+        }
+        .face-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #303133;
+        }
+        .face-subtitle {
+            font-size: 13px;
+            color: #909399;
+            margin-bottom: 16px;
+        }
+        .video-wrapper {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 16px;
+        }
+        .error-text {
+            color: #f56c6c;
+            font-size: 12px;
+            min-height: 18px;
+            margin-top: 4px;
+        }
+        .btn-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+<div id="myApp" class="face-container">
+    <div class="face-left">
+        <div>
+            <div class="face-left-title">人脸采集注册</div>
+            <div class="face-left-subtitle">
+                使用摄像头采集人脸信息，并完成账号注册。<br>
+                请在光线充足的环境中正对摄像头，保持表情自然。
+            </div>
+        </div>
+        <div class="face-left-footer">
+            建议先检查摄像头是否可用，浏览器是否已允许访问摄像头。
+        </div>
+    </div>
+    <div class="face-right">
+        <div class="face-title">采集人脸并注册</div>
+        <div class="face-subtitle">填写基本信息，开启摄像头并完成采集</div>
+        <div class="video-wrapper">
+            <div id="video"></div>
+        </div>
+        <el-form :model="form" label-width="80px">
+            <el-form-item label="姓名">
+                <el-input v-model="form.name" placeholder="请输入姓名"></el-input>
+            </el-form-item>
+            <el-form-item label="年龄">
+                <el-input v-model="form.age" maxlength="3" placeholder="1-150"></el-input>
+            </el-form-item>
+            <el-form-item label="手机号">
+                <el-input v-model="form.phone" maxlength="11" placeholder="请输入11位手机号"></el-input>
+            </el-form-item>
+            <el-form-item label="密码">
+                <el-input v-model="form.password" type="password" placeholder="6-20位，包含数字和字母"></el-input>
+            </el-form-item>
+            <el-form-item label="确认密码">
+                <el-input v-model="form.password2" type="password" placeholder="请再次输入密码"></el-input>
+            </el-form-item>
+            <div class="error-text">{{ errorText }}</div>
+            <div class="btn-row">
+                <el-button type="primary" :loading="loading" @click="facecollect">采集并注册</el-button>
+                <el-button plain @click="goHome">返回首页</el-button>
+            </div>
+        </el-form>
+    </div>
+</div>
+</body>
+<script>
+    new Vue({
+        el: "#myApp",
+        data: {
+            form: {
+                name: "",
+                age: "",
+                phone: "",
+                password: "",
+                password2: ""
+            },
+            loading: false,
+            errorText: ""
+        },
+        methods:{
+            validatePhone:function (phone) {
+                return /^\d{11}$/.test(phone)
+            },
+            validateAge:function (age) {
+                var n = parseInt(age)
+                if (isNaN(n)) {
+                    return false
+                }
+                return n >= 1 && n <= 150
+            },
+            validatePassword:function (pwd) {
+                if (!pwd) {
+                    return false
+                }
+                if (pwd.length < 6 || pwd.length > 20) {
+                    return false
+                }
+                if (!/[A-Za-z]/.test(pwd)) {
+                    return false
+                }
+                if (!/[0-9]/.test(pwd)) {
+                    return false
+                }
+                return true
+            },
+            facecollect(){
+                var name = this.form.name
+                var age = this.form.age
+                var phone = this.form.phone
+                var pwd = this.form.password
+                var pwd2 = this.form.password2
+                this.errorText = ""
+                if (!name) {
+                    this.errorText = "姓名不能为空"
+                    alert(this.errorText)
+                    return
+                }
+                if (!this.validateAge(age)) {
+                    this.errorText = "年龄必须是1-150岁的整数"
+                    alert(this.errorText)
+                    return
+                }
+                if (!this.validatePhone(phone)) {
+                    this.errorText = "手机号必须为11位数字"
+                    alert(this.errorText)
+                    return
+                }
+                if (!this.validatePassword(pwd)) {
+                    this.errorText = "密码格式不正确"
+                    alert(this.errorText)
+                    return
+                }
+                if (!pwd || !pwd2) {
+                    this.errorText = "密码和确认密码不能为空"
+                    alert(this.errorText)
+                    return
+                }
+                if (pwd !== pwd2) {
+                    this.errorText = "两次输入的密码不一致"
+                    alert(this.errorText)
+                    return
+                }
+                const code = faceUtile.getDecode();
+                if (!code) {
+                    this.errorText = "未获取到人脸图片，请检查摄像头"
+                    alert(this.errorText)
+                    return
+                }
+                const params = {
+                    name: name,
+                    age: age,
+                    phone: phone,
+                    pwd: pwd,
+                    pwd2: pwd2,
+                    image:code,
+                }
+                var that = this
+                this.loading = true
+                axios.post("/face_collect/", params).then(function (res) {
+                    var data = res.data
+                    if (data.code === 200) {
+                        if (that.$message) {
+                            that.$message.success("注册成功")
+                        } else {
+                            alert("注册成功")
+                        }
+                        setTimeout(function () {
+                            window.location.href = "/"
+                        }, 500)
+                    } else {
+                        that.errorText = data.msg || "注册失败"
+                        if (that.$message) {
+                            that.$message.error(that.errorText)
+                        } else {
+                            alert(that.errorText)
+                        }
+                    }
+                }).catch(function (err) {
+                    console.log("请求失败:", err)
+                    that.errorText = "人脸信息采集失败"
+                    if (that.$message) {
+                        that.$message.error(that.errorText)
+                    } else {
+                        alert(that.errorText)
+                    }
+                }).then(function () {
+                    that.loading = false
+                })
+            },
+            goHome: function () {
+                try {
+                    if (window.top && window.top !== window) {
+                        window.top.postMessage({ action: 'close_overlay' }, '*')
+                        return
+                    }
+                } catch (e) {}
+                window.location.href = '/'
+            }
+
+        }
+    })
+    $(function () {
+        faceUtile.width = 640;
+        faceUtile.height = 480;
+        faceUtile.openVideo("video")
+    });
+</script>
+</html>

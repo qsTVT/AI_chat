@@ -1,0 +1,123 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>管理员控制台</title>
+    <script src="{% static 'js/vue.min.js' %}"></script>
+    <script src="{% static 'js/index.js' %}"></script>
+    <script src="{% static 'js/axios.min.js' %}"></script>
+    <link href="{% static 'css/index.css' %}" rel="stylesheet">
+    <link href="{% static 'css/element-icons.css' %}" rel="stylesheet">
+</head>
+<body>
+<div id="adminApp" class="home-container">
+    <div class="home-right" style="width:100%;padding:24px 24px;">
+        <div class="home-title">管理员控制台</div>
+        <div class="home-subtitle">可按姓名或手机号查询用户信息；显示密码为数据库中存储的哈希值。</div>
+        <el-form :inline="true" :model="query" label-width="80px" style="margin-top:8px;">
+            <el-form-item label="姓名">
+                <el-input v-model="query.name" placeholder="支持模糊查询"></el-input>
+            </el-form-item>
+            <el-form-item label="手机号">
+                <el-input v-model="query.phone" maxlength="11" placeholder="精确匹配"></el-input>
+            </el-form-item>
+            <el-form-item>
+                <el-button type="primary" :loading="loading" @click="search">查询</el-button>
+                <el-button plain :disabled="loading" @click="showAll">显示全部</el-button>
+                <el-button plain :disabled="loading" @click="goStats">年龄可视化</el-button>
+                <el-button plain @click="goHome">返回首页</el-button>
+            </el-form-item>
+        </el-form>
+        <el-table :data="rows" style="width: 100%; margin-top:12px;">
+            <el-table-column prop="id" label="ID" width="100"></el-table-column>
+            <el-table-column prop="name" label="姓名" width="180"></el-table-column>
+            <el-table-column prop="age" label="年龄" width="100"></el-table-column>
+            <el-table-column prop="phone" label="手机号" width="160"></el-table-column>
+            <el-table-column prop="password" label="密码哈希"></el-table-column>
+            <el-table-column label="照片" width="200">
+                <template slot-scope="scope">
+                    <img v-if="scope.row.photo_url" :src="scope.row.photo_url" alt="用户照片" style="height:120px; border-radius:8px;" />
+                    <span v-else>无照片</span>
+                </template>
+            </el-table-column>
+            <el-table-column label="操作" width="320">
+                <template slot-scope="scope">
+                    <el-button size="mini" type="warning" @click="setPassword(scope.row)">修改密码</el-button>
+                    <el-button size="mini" type="danger" @click="deleteUser(scope.row)">删除用户</el-button>
+                </template>
+            </el-table-column>
+        </el-table>
+        <div class="error-text">{{ errorText }}</div>
+    </div>
+</div>
+<script>
+    new Vue({
+        el: '#adminApp',
+        data: function () {
+            return {
+                query: { name: '', phone: '' },
+                rows: [],
+                loading: false,
+                errorText: ''
+            }
+        },
+        mounted: function () {
+            this.search()
+        },
+        methods: {
+            search: function () {
+                var that=this
+                this.errorText=''
+                this.loading=true
+                axios.post('/api/admin/search_user/', { name: this.query.name, phone: this.query.phone })
+                    .then(function(res){
+                        var data = res.data
+                        if(data.code===200){
+                            that.rows = data.data || []
+                        }else{
+                            that.errorText = data.msg || '查询失败'; alert(that.errorText)
+                        }
+                    }).catch(function(){ that.errorText='请求失败，请稍后重试'; alert(that.errorText) })
+                      .then(function(){ that.loading=false })
+            },
+            showAll: function () {
+                this.query.name = ''
+                this.query.phone = ''
+                this.search()
+            },
+            setPassword: function (row) {
+                var pwd = window.prompt('请输入新密码（6-20位，包含数字和字母）：')
+                if (pwd === null) return
+                var that=this
+                axios.post('/api/admin/reset_password/', { user_id: row.id, new_password: pwd })
+                    .then(function(res){
+                        var data=res.data
+                        if(data.code===200){
+                            alert(data.msg || '修改成功')
+                        }else{
+                            alert(data.msg || '修改失败')
+                        }
+                    }).catch(function(){ alert('请求失败，请稍后重试') })
+            },
+            deleteUser: function (row) {
+                if (!confirm('确定删除该用户？此操作不可恢复（包含数据库信息与照片）')) return
+                var that=this
+                axios.post('/api/admin/delete_user/', { user_id: row.id })
+                    .then(function(res){
+                        var data=res.data
+                        if(data.code===200){
+                            that.rows = (that.rows || []).filter(function(r){ return r.id !== row.id })
+                            alert(data.msg || '删除成功')
+                        }else{
+                            alert(data.msg || '删除失败')
+                        }
+                    }).catch(function(){ alert('请求失败，请稍后重试') })
+            },
+            goStats: function () { window.location.href = '/page/stats/' },
+            goHome: function(){ window.location.href='/' }
+        }
+    })
+</script>
+</body>
+</html>

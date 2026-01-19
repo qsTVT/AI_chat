@@ -1,0 +1,8 @@
+@font-face{
+font-family:element-icons;
+src:url(https://unpkg.com/element-ui/lib/theme-chalk/fonts/element-icons.woff) format("woff"),
+url(https://unpkg.com/element-ui/lib/theme-chalk/fonts/element-icons.ttf) format("truetype");
+font-weight:400;
+font-style:normal;
+font-display:auto
+}

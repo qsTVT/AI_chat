@@ -1,0 +1,229 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>年龄统计</title>
+    <script src="{% static 'js/vue.min.js' %}"></script>
+    <script src="{% static 'js/index.js' %}"></script>
+    <script src="{% static 'js/axios.min.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <link href="{% static 'css/index.css' %}" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .stats-container {
+            width: 1100px;
+            max-width: 98%;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            padding: 24px 24px 16px;
+            box-sizing: border-box;
+        }
+        .stats-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .stats-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #303133;
+        }
+        .stats-subtitle {
+            font-size: 13px;
+            color: #909399;
+            margin-top: 4px;
+        }
+        .stats-title-wrap {
+            display: flex;
+            flex-direction: column;
+        }
+        .charts-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .chart-box {
+            flex: 1;
+            height: 320px;
+            border-radius: 12px;
+            background: #f9fafc;
+        }
+        .chart-full {
+            width: 100%;
+            height: 320px;
+            border-radius: 12px;
+            background: #f9fafc;
+        }
+    </style>
+</head>
+<body>
+{% verbatim %}
+<div id="statsApp" class="stats-container">
+    <div class="stats-header">
+        <div class="stats-title-wrap">
+            <div class="stats-title">用户年龄统计</div>
+            <div class="stats-subtitle">通过饼图、柱状图和折线图展示用户年龄分布</div>
+        </div>
+        <div>
+            <el-button size="mini" type="primary" @click="goAdmin">返回后台</el-button>
+        </div>
+    </div>
+    <div class="charts-row">
+        <div id="pieChart" class="chart-box"></div>
+        <div id="barChart" class="chart-box"></div>
+    </div>
+    <div>
+        <div id="lineChart" class="chart-full"></div>
+    </div>
+</div>
+{% endverbatim %}
+</body>
+<script>
+    new Vue({
+        el: '#statsApp',
+        data() {
+            return {
+                loading: false
+            }
+        },
+        mounted() {
+            this.loadData();
+        },
+        methods: {
+            loadData() {
+                this.loading = true;
+                axios.get('/api/stats/age/').then(res => {
+                    var data = res.data;
+                    if (data.code === 200) {
+                        this.initCharts(data.data);
+                    } else {
+                        alert(data.msg || '统计数据获取失败');
+                    }
+                }).catch(() => {
+                    alert('请求失败，请稍后重试');
+                }).then(() => {
+                    this.loading = false;
+                });
+            },
+            initCharts(data) {
+                var pieDom = document.getElementById('pieChart');
+                var barDom = document.getElementById('barChart');
+                var lineDom = document.getElementById('lineChart');
+                if (!pieDom || !barDom || !lineDom) {
+                    return;
+                }
+                var pieChart = echarts.init(pieDom);
+                var barChart = echarts.init(barDom);
+                var lineChart = echarts.init(lineDom);
+                var pieData = data.pie || [];
+                var barNames = (data.bar && data.bar.names) || [];
+                var barAges = (data.bar && data.bar.ages) || [];
+                var lineNames = (data.line && data.line.names) || barNames;
+                var lineAges = (data.line && data.line.ages) || barAges;
+                pieChart.setOption({
+                    title: {
+                        text: '年龄阶段占比',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'item'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 'left'
+                    },
+                    series: [
+                        {
+                            name: '占比',
+                            type: 'pie',
+                            radius: '60%',
+                            data: pieData,
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                });
+                barChart.setOption({
+                    title: {
+                        text: '用户年龄柱状图',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: barNames,
+                        axisLabel: {
+                            rotate: 30
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: '年龄'
+                    },
+                    series: [
+                        {
+                            name: '年龄',
+                            type: 'bar',
+                            data: barAges,
+                            itemStyle: {
+                                color: '#409EFF'
+                            }
+                        }
+                    ]
+                });
+                lineChart.setOption({
+                    title: {
+                        text: '用户年龄折线图',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: lineNames,
+                        axisLabel: {
+                            rotate: 30
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: '年龄'
+                    },
+                    series: [
+                        {
+                            name: '年龄',
+                            type: 'line',
+                            smooth: true,
+                            data: lineAges,
+                            itemStyle: {
+                                color: '#67C23A'
+                            }
+                        }
+                    ]
+                });
+            },
+            goAdmin() { window.location.href = '/page/admin/dashboard/' }
+        }
+    });
+</script>
+</html>

@@ -1,0 +1,382 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <script src={% static "js/vue.min.js" %}></script>
+    <script src={% static "js/index.js" %}></script>
+    <script src={% static "js/marked.min.js" %}></script>
+    <script src={% static "js/purify.min.js" %}></script>
+    <script src={% static "js/axios.min.js" %}></script>
+    <link href={% static "css/index.css" %} rel="stylesheet"/>
+</head>
+<body>
+{% verbatim %}
+<div id="chatApp">
+    <div id="chat-layout">
+        <div id="history-panel">
+            <div class="history-header">
+                <div class="history-title">对话历史</div>
+                <div class="history-subtitle">点击查看对应的问题位置</div>
+            </div>
+            <div class="history-list">
+                <div v-for="(item, index) in historyList"
+                     :key="index"
+                     class="history-item"
+                     @click="scrollToMessage(item.messageIndex)">
+                    <div class="history-item-title">问题 {{ index + 1 }}</div>
+                    <div class="history-item-preview">{{ item.preview }}</div>
+                </div>
+                <div v-if="historyList.length === 0" class="history-empty">
+                    暂无历史，对话开始后会在此展示
+                </div>
+            </div>
+        </div>
+        <div id="chat-main">
+            <div id="chat-header">
+                <div>
+                    <div class="chat-header-title">AI 聊天助手</div>
+                    <div class="chat-header-subtitle">支持 Markdown 渲染和上下文记忆</div>
+                </div>
+                <div style="margin-left: auto;">
+                    <el-button size="mini" @click="goHome">返回登录</el-button>
+                </div>
+            </div>
+            <div id="chat-container">
+                <div id="messages">
+                    <div v-for="(msg,index) in messages" :key="index"
+                         class="message" :class="msg.role">
+                        <div v-html="msg.html || renderMarkDown(msg.content)">
+                        </div>
+                    </div>
+                </div>
+                <div id="input-area">
+                    <el-row>
+                        <el-col :span="22">
+                            <el-input v-model="input" type="textarea" :rows="2"
+                                      placeholder="请输入信息，按 Enter 发送..."
+                                      @keydown.enter.native.prevent="sendMessage">
+                            </el-input>
+                        </el-col>
+                        <el-col :span="2">
+                            <el-button type="primary" @click="sendMessage">发送</el-button>
+                        </el-col>
+                    </el-row>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endverbatim %}
+</body>
+<script>
+    new Vue({
+        el: '#chatApp',
+        data() {
+            return {
+                input: '',
+                messages: [{
+                    "role": "assistant",
+                    "content": "你好，我是 AI 助手，可以帮你解答问题~"
+                }]
+            }
+        },
+        computed: {
+            historyList() {
+                const userIndexes = []
+                this.messages.forEach((m, index) => {
+                    if (m.role === "user") userIndexes.push(index)
+                })
+                if (userIndexes.length === 0) return []
+                const last = this.messages[userIndexes[userIndexes.length - 1]]
+                let text = (last && last.content) ? String(last.content) : ""
+                if (text.length > 20) text = text.slice(0, 20) + "..."
+                return [{
+                    messageIndex: userIndexes[0],
+                    preview: "本次会话（" + userIndexes.length + "条问题）：" + (text || "空消息")
+                }]
+            }
+        },
+        methods: {
+            scrollToBottom() {
+                this.$nextTick(() => {
+                    const container = document.getElementById('messages');
+                    container.scrollTop = container.scrollHeight;
+                });
+            },
+            scrollToMessage(index) {
+                this.$nextTick(() => {
+                    const container = document.getElementById('messages')
+                    if (!container) {
+                        return
+                    }
+                    const nodes = container.getElementsByClassName('message')
+                    if (index >= 0 && index < nodes.length) {
+                        const el = nodes[index]
+                        if (el && el.scrollIntoView) {
+                            el.scrollIntoView({behavior: 'smooth', block: 'start'})
+                        }
+                    }
+                })
+            },
+            renderMarkDown(text) {
+                let rawHtml = marked.parse(text);
+                return DOMPurify.sanitize(rawHtml);
+            },
+            sendMessage() {
+                if (!this.input.trim()) return;
+// 添加用户消息
+                this.messages.push({
+                    role: 'user',
+                    content: this.input
+                });
+// 占位 AI 消息
+                const aiIndex = this.messages.push({
+                    role: 'assistant',
+                    content: 'AI 正在输入...'
+                }) - 1;
+                let sessionId = sessionStorage.getItem('SESSIONID');
+                let userMsg = {"question": this.input};
+                this.input = '';
+                fetch('/chat/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Chat-Session-ID': sessionId
+                    },
+                    body:
+                        `messages=${encodeURIComponent(JSON.stringify(userMsg))}`
+                }).then(response => {
+// 创建一个流读取器 (reader) 用于逐块读取数据
+                    const reader = response.body.getReader();
+// 创建一个文本解码器 (decoder)
+                    const decoder = new TextDecoder();
+// 用来累积流式返回的文本，最终就是 AI 的完整回复
+                    let aiContent = '';
+// 读取数据
+                    const read = () => {
+                        reader.read().then(({
+                                                done,
+                                                value
+                                            }) => {
+                            if (done) {
+// 流结束
+                                if (!aiContent.trim()) {
+                                    this.$set(this.messages, aiIndex, {
+                                        role: 'assistant',
+                                        content: 'AI 没有返回内容'
+                                    });
+                                }
+                                return;
+                            }
+                            aiContent += decoder.decode(value, {
+                                stream: true
+                            });
+                            this.$set(this.messages, aiIndex, {
+                                role: 'assistant',
+                                content: aiContent
+                            });
+                            this.scrollToBottom();
+// 继续读取数据-递归
+                            read();
+                        });
+                    };
+// 开始读取数据
+                    read();
+// 把数据替换当前message数组中的content内容为最终的回复
+                    this.messages[aiIndex].content = aiContent;
+                }).catch(err => {
+                    console.error(err);
+                    this.$set(this.messages, aiIndex, {
+                        role: 'assistant',
+                        content: '请求失败，请稍后重试'
+                    });
+                    this.scrollToBottom();
+                });
+                this.scrollToBottom();
+            },
+            goHome() {
+                window.location.href = '/';
+            },
+            getSessionId() {
+                axios.get('/session/')
+                    .then(result => {
+                        let data = result.data;
+                        if (data.code == 200) {
+                            let sessionId = data.data;
+                            sessionStorage.clear();
+                            sessionStorage.setItem('SESSIONID', sessionId);
+                        }
+                    })
+            }
+        },
+        mounted() {
+            this.getSessionId();
+        }
+    })
+</script>
+<style>
+    body {
+        margin: 0;
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    #chatApp {
+        width: 1100px;
+        max-width: 98%;
+        height: 90vh;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+    }
+
+    #chat-layout {
+        display: flex;
+        height: 100%;
+        min-height: 0;
+    }
+
+    #history-panel {
+        width: 260px;
+        background: linear-gradient(135deg, #4e54c8, #8f94fb);
+        color: #ffffff;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .history-header {
+        padding: 20px 18px 12px 18px;
+    }
+
+    .history-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .history-subtitle {
+        font-size: 12px;
+        opacity: 0.9;
+    }
+
+    .history-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 12px 12px 12px;
+    }
+
+    .history-item {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    .history-item:hover {
+        background: rgba(255, 255, 255, 0.16);
+        transform: translateY(-1px);
+    }
+
+    .history-item-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .history-item-preview {
+        font-size: 12px;
+        opacity: 0.9;
+        word-break: break-all;
+    }
+
+    .history-empty {
+        font-size: 12px;
+        opacity: 0.9;
+        padding: 0 4px;
+    }
+
+    #chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #f5f7fa;
+        min-height: 0;
+        min-width: 0;
+    }
+
+    #chat-header {
+        padding: 16px 20px 10px 20px;
+        border-bottom: 1px solid #e4e7ed;
+        background: #ffffff;
+    }
+
+    .chat-header-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #303133;
+        margin-bottom: 4px;
+    }
+
+    .chat-header-subtitle {
+        font-size: 12px;
+        color: #909399;
+    }
+
+    #chat-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        height: 100%;
+        min-height: 0;
+    }
+
+    #messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        border-bottom: 1px solid #e4e7ed;
+        min-height: 0;
+    }
+
+    .message {
+        max-width: 70%;
+        margin-bottom: 15px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    /* 根据 class 控制左右和样式 */
+    .message.user {
+        align-self: flex-end;
+        background: #409EFF;
+        color: white;
+    }
+
+    .message.assistant {
+        align-self: flex-start;
+        background: #ffffff;
+        border: 1px solid #e4e7ed;
+        color: black;
+    }
+
+    #input-area {
+        border-top: 1px solid #e4e7ed;
+        padding: 10px;
+        background: #fff;
+    }
+</style>
+</html>
