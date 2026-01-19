@@ -126,6 +126,7 @@ def face_collect(request):
             })
     data = json.loads(request.body.decode("utf-8"))
     name = data["name"]
+    gender = data.get("gender", "未知")
     age = data["age"]
     phone = data["phone"]
     pwd = data["pwd"]
@@ -197,7 +198,7 @@ def face_collect(request):
         })
     hashed_pwd = make_password(pwd)
     try:
-        face_insert(name_id, name, age, phone, hashed_pwd)
+        face_insert(name_id, name, age, phone, hashed_pwd, gender)
     except Exception as e:
         print(e)
         return JsonResponse({
@@ -418,7 +419,7 @@ def face_select(id=None, phone=None):
             connection.close()
 
 
-def face_insert(id, name, age, phone, pwd):
+def face_insert(id, name, age, phone, pwd, gender='未知'):
     db = None
     try:
         db = pymysql.connect(
@@ -429,8 +430,8 @@ def face_insert(id, name, age, phone, pwd):
             charset=settings.MYAPP_DB["CHARSET"],
         )
         cursor = db.cursor()
-        sql = f"insert into {settings.MYAPP_DB['TABLE_USER_INFO']}(id,user_name,age,phone,password) values(%s,%s,%s,%s,%s)"
-        cursor.execute(sql, (id, name, age, phone, pwd))
+        sql = f"insert into {settings.MYAPP_DB['TABLE_USER_INFO']}(id,user_name,age,phone,password,gender) values(%s,%s,%s,%s,%s,%s)"
+        cursor.execute(sql, (id, name, age, phone, pwd, gender))
         db.commit()
         print("插入成功")
         return True

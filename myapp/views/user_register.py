@@ -21,6 +21,7 @@ def api_register(request):
             "msg": "请求数据格式错误",
         })
     name = data.get("name")
+    gender = data.get("gender", "未知")
     age = data.get("age")
     phone = data.get("phone")
     pwd = data.get("pwd")
@@ -71,7 +72,7 @@ def api_register(request):
         })
     hashed_pwd = make_password(pwd)
     try:
-        face_insert(user_id, name, age, phone, hashed_pwd)
+        face_insert(user_id, name, age, phone, hashed_pwd, gender)
     except Exception as e:
         print(e)
         return JsonResponse({

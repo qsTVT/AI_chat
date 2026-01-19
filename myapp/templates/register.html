@@ -60,6 +60,12 @@
                     <el-form-item label="姓名">
                         <el-input v-model="registerForm.name" placeholder="请输入姓名"></el-input>
                     </el-form-item>
+                    <el-form-item label="性别">
+                        <el-radio-group v-model="registerForm.gender">
+                            <el-radio label="男">男</el-radio>
+                            <el-radio label="女">女</el-radio>
+                        </el-radio-group>
+                    </el-form-item>
                     <el-form-item label="年龄">
                         <el-input v-model="registerForm.age" placeholder="1-150" maxlength="3"></el-input>
                     </el-form-item>
@@ -87,6 +93,12 @@
                 <el-form class="auth-form" :model="faceForm" label-width="80px" style="margin-top:8px;">
                     <el-form-item label="姓名">
                         <el-input v-model="faceForm.name" placeholder="请输入姓名"></el-input>
+                    </el-form-item>
+                    <el-form-item label="性别">
+                        <el-radio-group v-model="faceForm.gender">
+                            <el-radio label="男">男</el-radio>
+                            <el-radio label="女">女</el-radio>
+                        </el-radio-group>
                     </el-form-item>
                     <el-form-item label="年龄">
                         <el-input v-model="faceForm.age" maxlength="3" placeholder="1-150"></el-input>
@@ -135,10 +147,10 @@
         data: function () {
             return {
                 activeTab: 'account',
-                registerForm: { name: '', age: '', phone: '', password: '', password2: '' },
+                registerForm: { name: '', gender: '男', age: '', phone: '', password: '', password2: '' },
                 registerLoading: false,
                 registerError: '',
-                faceForm: { name: '', age: '', phone: '', password: '', password2: '' },
+                faceForm: { name: '', gender: '男', age: '', phone: '', password: '', password2: '' },
                 faceLoading: false,
                 faceError: '',
                 enrollForm: { phone: '', password: '' },
@@ -175,7 +187,7 @@
                 if (!this.validatePassword(f.password)) { this.registerError='密码格式不正确'; alert(this.registerError); return }
                 if (f.password !== f.password2) { this.registerError='两次输入的密码不一致'; alert(this.registerError); return }
                 this.registerLoading = true
-                axios.post('/api/register/', { name:f.name, age:f.age, phone:f.phone, pwd:f.password, pwd2:f.password2 })
+                axios.post('/api/register/', { name:f.name, gender:f.gender, age:f.age, phone:f.phone, pwd:f.password, pwd2:f.password2 })
                     .then(function (res) {
                         var data = res.data
                         if (data.code === 200) {
@@ -214,7 +226,7 @@
                 if (!code) { this.faceError='未获取到人脸图片，请检查摄像头'; alert(this.faceError); return }
                 var that=this
                 this.faceLoading=true
-                axios.post('/face_collect/', { name:f.name, age:f.age, phone:f.phone, pwd:f.password, pwd2:f.password2, image: code })
+                axios.post('/face_collect/', { name:f.name, gender:f.gender, age:f.age, phone:f.phone, pwd:f.password, pwd2:f.password2, image: code })
                     .then(function(res){
                         var data=res.data
                         if(data.code===200){
