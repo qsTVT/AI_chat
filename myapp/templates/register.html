@@ -82,7 +82,7 @@
             <el-tab-pane label="人脸注册" name="face">
                 <div class="section-title">填写信息并采集人脸</div>
                 <div class="video-wrapper" style="margin-top:8px;">
-                    <div id="video"></div>
+                    <div id="video" v-if="activeTab === 'face'"></div>
                 </div>
                 <el-form class="auth-form" :model="faceForm" label-width="80px" style="margin-top:8px;">
                     <el-form-item label="姓名">
@@ -110,7 +110,7 @@
             <el-tab-pane label="人脸录入" name="enroll">
                 <div class="section-title">已有账号通过手机号与密码单独录入人脸</div>
                 <div class="video-wrapper" style="margin-top:8px;">
-                    <div id="videoEnroll"></div>
+                    <div id="videoEnroll" v-if="activeTab === 'enroll'"></div>
                 </div>
                 <el-form class="auth-form" :model="enrollForm" label-width="80px" style="margin-top:8px;">
                     <el-form-item label="手机号">
@@ -151,6 +151,8 @@
         },
         watch: {
             activeTab: function (v) {
+                // 切换tab时先关闭旧的
+                try { faceUtile.closeVideo() } catch(e){}
                 this.ensureCam()
             }
         },
