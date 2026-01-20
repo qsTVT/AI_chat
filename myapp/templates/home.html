@@ -3,7 +3,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>智能人脸登录系统</title>
+    <title>猫娘聊天系统</title>
     <script src="{% static 'js/vue.min.js' %}"></script>
     <script src="{% static 'js/index.js' %}"></script>
     <script src="{% static 'js/axios.min.js' %}"></script>
@@ -17,25 +17,26 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #E0FFFF 0%, #F0F8FF 100%);
+            font-family: "Comic Sans MS", "Chalkboard SE", "Soft", sans-serif;
         }
         .home-container {
             width: 980px;
             max-width: 94%;
-            background: rgba(255, 255, 255, 0.98);
-            border-radius: 14px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(100, 149, 237, 0.2);
             display: flex;
             overflow: hidden;
             height: 68vh;
             min-height: 480px;
+            border: 2px solid #B0C4DE;
         }
         .home-left {
             flex: 1;
             padding: 18px 18px;
-            background: linear-gradient(135deg, #4e54c8, #8f94fb);
-            color: #ffffff;
+            background: linear-gradient(180deg, #F0F8FF 0%, #E6E6FA 100%);
+            color: #5c5c5c;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -44,6 +45,8 @@
             font-size: 22px;
             font-weight: 700;
             margin-bottom: 10px;
+            color: #4B0082;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.5);
         }
         .home-left-subtitle {
             font-size: 13px;
@@ -62,12 +65,12 @@
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 6px;
-            color: #303133;
+            color: #FF69B4;
             text-align: center;
         }
         .home-subtitle {
             font-size: 12px;
-            color: #909399;
+            color: #FF99AC;
             text-align: center;
             margin-bottom: 16px;
         }
@@ -86,7 +89,7 @@
             width: 48%;
         }
         .error-text {
-            color: #f56c6c;
+            color: #ff6b6b;
             font-size: 12px;
             margin-top: 4px;
             min-height: 18px;
@@ -100,25 +103,61 @@
         .home-actions .el-button {
             width: 100%;
             margin: 0;
+            border-radius: 12px !important;
+            border: none !important;
+            font-weight: bold;
         }
+        
+        .el-button--primary {
+            background-color: #87CEFA !important;
+            color: white !important;
+        }
+        .el-button--primary:hover {
+            background-color: #00BFFF !important;
+        }
+        
+        .el-button--danger {
+            background-color: #FFB6C1 !important;
+            color: white !important;
+        }
+        .el-button--danger:hover {
+            background-color: #FF69B4 !important;
+        }
+        
+        .el-button--warning {
+            background-color: #DDA0DD !important;
+            color: white !important;
+        }
+        .el-button--warning:hover {
+            background-color: #BA55D3 !important;
+        }
+        
+        .el-button--success {
+            background-color: #98FB98 !important;
+            color: white !important;
+        }
+        .el-button--success:hover {
+            background-color: #3CB371 !important;
+        }
+
         .frame-wrapper {
             margin-top: 20px;
-            border: 1px solid #ebeef5;
-            border-radius: 8px;
+            border: 1px solid #FFC0CB;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 12px rgba(255, 182, 193, 0.2);
         }
         .frame-toolbar {
-            background: #f5f7fa;
+            background: #FFF0F5;
             padding: 8px 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #ebeef5;
+            border-bottom: 1px solid #FFC0CB;
         }
         .frame-title {
             font-size: 14px;
-            color: #606266;
+            color: #FF69B4;
         }
         .frame-content {
             height: calc(68vh - 64px);
@@ -135,15 +174,15 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.95);
             z-index: 999;
             display: flex;
             flex-direction: column;
         }
         .overlay-toolbar {
             height: 48px;
-            background: #f5f7fa;
-            border-bottom: 1px solid #ebeef5;
+            background: #FFF0F5;
+            border-bottom: 1px solid #FFC0CB;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -151,7 +190,8 @@
         }
         .overlay-title {
             font-size: 14px;
-            color: #606266;
+            color: #FF69B4;
+            font-weight: bold;
         }
         .overlay-content {
             flex: 1;
@@ -168,7 +208,7 @@
 <div id="homeApp" class="home-container">
     <div class="home-left">
         <div style="text-align:center;">
-            <div class="home-left-title" style="margin-top:6px;">欢迎使用AI聊天机器人</div>
+            <div class="home-left-title" style="margin-top:6px;">欢迎使用猫娘AI聊天机器人</div>
             <div class="home-left-subtitle" style="margin-top:6px;opacity:0.95;">请登录使用</div>
             <div class="home-actions" style="margin-top:16px;">
                 <el-button v-if="!isAuthed" type="primary" @click="goLogin">登录</el-button>
